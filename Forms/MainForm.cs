@@ -1,9 +1,11 @@
-﻿using System;
+﻿using Remote.Forms;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -11,36 +13,78 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-
-
-
 namespace Remote
 {
     public partial class MainForm : Form
     {
-
-        
         // 定时器
         System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
 
-        const string IniFileName = "config.ini"; // 默认账密配置文件
-        const string RDPFileName = ".RDPconfig";  // RDP临时文件夹
+        const string IniFileName = "config.ini";    // 默认账密配置文件
+        const string RDPFileName = ".RDPconfig";    // RDP临时文件夹
+        public string ConfigFolderPath;             // RDP全路径
 
         // 读取系统属性
-        public static bool deleteFlag = Properties.Settings.Default.deleteFlag;
-        public static bool tcpPingFlag = Properties.Settings.Default.tcpPingFlag;
-        public static bool fullScreenFlag = Properties.Settings.Default.fullScreenFlag;
-        public static bool topFlag = Properties.Settings.Default.topFlag;
-        public static bool SSHFlag = Properties.Settings.Default.SSHFlag;
-        public static string SSHMethod = Properties.Settings.Default.SSHMethodFlag;
-        public static bool SSHLowPingFlag = Properties.Settings.Default.SSHLowPingFlag;
-        public static string screenMode = fullScreenFlag?"0":"1";  // 全屏=0，窗口=1
+        public static bool deleteFlag = Properties.Settings.Default.deleteFlag;             // 关闭删除RDP文件
+        public static bool tcpPingFlag = Properties.Settings.Default.tcpPingFlag;           // 端口Ping
+        public static bool fullScreenFlag = Properties.Settings.Default.fullScreenFlag;     // 全屏，配合screenMode
+        public static bool topFlag = Properties.Settings.Default.topFlag;                   // 置顶
+        public static bool SSHFlag = Properties.Settings.Default.SSHFlag;                   // 右侧两窗口是否支持SSH
+        public static string SSHMethod = Properties.Settings.Default.SSHMethodFlag;         // SSH客户端
+        public static bool SSHLowPingFlag = Properties.Settings.Default.SSHLowPingFlag;     // SSH端口低Ping
+        public static int TimeInterval = Properties.Settings.Default.TimeInterval;          // 端口Ping间隔、超时间隔
+        public static int width  = Properties.Settings.Default.width;                       // 分辨率宽度
+        public static int height = Properties.Settings.Default.height;                      // 分辨率高度
+        public static bool windowsposition = Properties.Settings.Default.WindowsPosition;   // RDP窗口打开位置
 
 
-        // 读取RDP文件
+        private void syncSystemVariables()
+        {
+            Properties.Settings.Default.deleteFlag = deleteFlag;
+            Properties.Settings.Default.tcpPingFlag = tcpPingFlag;
+            Properties.Settings.Default.fullScreenFlag = fullScreenFlag;
+            Properties.Settings.Default.topFlag = topFlag;
+            Properties.Settings.Default.SSHFlag = SSHFlag;
+            Properties.Settings.Default.SSHMethodFlag = SSHMethod;
+            Properties.Settings.Default.SSHLowPingFlag = SSHLowPingFlag;
+            Properties.Settings.Default.TimeInterval = TimeInterval;
+            Properties.Settings.Default.width = width;
+            Properties.Settings.Default.height = height;
+            Properties.Settings.Default.WindowsPosition = windowsposition;
+            Properties.Settings.Default.Save();
+        }
+        private void syncVariables()
+        {
+            // 读取系统属性
+            deleteFlag = Properties.Settings.Default.deleteFlag;
+            tcpPingFlag = Properties.Settings.Default.tcpPingFlag;
+            fullScreenFlag = Properties.Settings.Default.fullScreenFlag;
+            topFlag = Properties.Settings.Default.topFlag;
+            SSHFlag = Properties.Settings.Default.SSHFlag;
+            SSHMethod = Properties.Settings.Default.SSHMethodFlag;
+            SSHLowPingFlag = Properties.Settings.Default.SSHLowPingFlag;
+            TimeInterval = Properties.Settings.Default.TimeInterval;
+            width = Properties.Settings.Default.width;
+            height = Properties.Settings.Default.height;
+            windowsposition = Properties.Settings.Default.WindowsPosition;
+        }
+        private void syncWindowsOption()
+        {
+            // 同步Checkbox选择
+            TcpPingCheck.Checked = tcpPingFlag;
+            FullScreenCheck.Checked = fullScreenFlag;
+            TopMostCheck.Checked = topFlag;
+            ResolutionComboBox.Text = width.ToString() + "x" + height.ToString();
+            //DeleteRDPCheck.Checked = deleteFlag;
+            //SSHLoginCheck.Checked =SSHFlag;
+            //SSHMethodCheck.Checked = SSHMethod;
+            //SSHLowPingCheck.Checked = SSHLowPingFlag;
+        }
+
+
+        // 通过[名称]读取ini默认账密
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern int GetPrivateProfileString(string section, string key, string defaultValue, StringBuilder returnedString, int size, string filePath);
-
 
 
 
@@ -59,140 +103,43 @@ namespace Remote
             // 获取执行文件所在目录下的 .config 文件夹路径
             ConfigFolderPath = Path.Combine(Application.StartupPath, RDPFileName);
 
-            // 定时器间隔1000（毫秒）
-            timer.Interval = 1000; // 
+            // 定时器间隔
+            timer.Interval = TimeInterval; 
             timer.Tick += Timer_Tick;
         }
+        
 
-
-        // 覆盖OnFormClosing事件
+        // 窗口关闭事件
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             base.OnFormClosing(e);
-
-            // 检查窗体是否正在关闭
             if (e.CloseReason == CloseReason.UserClosing)
             {
-
-
-                if (Properties.Settings.Default.deleteFlag == true)
-                {
-                    deleteRDPList();
-                    
-                }
-                refreshCheckboxState();
-                UpdateAttribute();
-                
+                syncSystemVariables();
+                if(deleteFlag){deleteRDPList();}
+                deleteRegList();
             }
         }
-        
+
+        // 程序初始化事件
         private void Form1_Load(object sender, EventArgs e)
         {
             // 同步单选框状态
-            refreshCheckboxState();
-
-
+            syncVariables();
+            syncWindowsOption();
+            flashHistoryList();
             // 检查默认密码文件是否存在
-            if (File.Exists(IniFileName))
-            {
-                Console.WriteLine("config.ini 文件已存在。");
-            }
-            else
-            {
-                // 文件不存在，创建文件
-                try
-                {
-                    //using (StreamWriter sw = File.CreateText(IniFileName))
-                    using (StreamWriter sw = new StreamWriter(IniFileName, false, System.Text.Encoding.GetEncoding("gb2312")))
-                    {
-                        sw.WriteLine($@"[Default]
-端口=3389
-账号=Administrator
-密码=123qwe!@#
-");
-                    }
-                    // 获取文件的文件属性
-                    FileAttributes attributes = File.GetAttributes(IniFileName);
-                    // 添加Hidden标志到文件属性中
-                    attributes |= FileAttributes.Hidden;
-                    // 设置文件的文件属性，将其隐藏
-                    File.SetAttributes(IniFileName, attributes);
-                    Console.WriteLine("config.ini 文件已创建。");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("创建文件时发生错误: " + ex.Message);
-                }
-            }
-
-
-            flashFileList();
-            LoadSectionsToComboBox(DefaultPassConnComboBox, IniFileName);
-            if (DefaultPassConnComboBox.Items.Count > 0)
-            {
-                DefaultPassConnComboBox.Text = (string)DefaultPassConnComboBox.Items[0];
-            }
-            // textBox5.Text = GetFirstSshFileName();
-            if (tcpPingFlag)
-            {
-                timer.Start();
-            } // 启动定时器
-
-
-        }
-
-        private async Task HandleTextBoxAsync(TextBox textBox, Label label, string defaultText = null)
-        {
-            if (!string.IsNullOrEmpty(textBox.Text))
-            {
-
-                string addr, ip, port, username, password;
-                defaultText = defaultText == "SSH" ? "22" : "3389";
-
-                ParseTextBoxContent(textBox.Text, out ip, out port, out username, out password, defaultText);
-                addr = ip + ":" + port;
-                label.Text = addr;
-
-                if (SSHFlag && defaultText == "SSH")
-                {
-                    int delay = await MeasureTcpPingExecutionTime(addr, timeoutMilliseconds: 1000);
-                    if (delay < 500 && delay > 0)
-                    {
-                        label.Text = $"{addr}   {delay}ms";
-                    }
-                    else
-                    {
-                        label.Text = $"{addr}  close";
-                    }
-                    //Console.WriteLine("SSH Print");
-                }
-                else
-                {
-                    int delay = await MeasureTcpPingExecutionTime(addr, timeoutMilliseconds: 1000);
-                    if (delay < 500 && delay > 0)
-                    {
-                        label.Text = $"{addr}   {delay}ms";
-                    }
-                    else
-                    {
-                        label.Text = $"{addr}  close";
-                    }
-                }
-
-
-            }
-            else
-            {
-                label.Text = defaultText ?? textBox.Name;
-            }
-            await Task.Delay(500);
+            PublicMethod.CreateINIfile();
+            LoadDefaultPassNameToComboBox(DefaultPassConnComboBox, IniFileName);
+            // 启动定时器
+            if (tcpPingFlag){timer.Start();} 
         }
 
         // 添加一个变量来跟踪上一次 ping 是否成功
         private bool lastPingSuccess1 = false;
         private bool lastPingSuccess2 = false;
-
-        private async Task<bool> HandleTextBoxAsyncBySSH(TextBox textBox, Label label, bool PingFlag,string defaultText = null)
+        //TCPPing
+        private async Task<bool> HandleTextBoxAsync(TextBox textBox, Label label, bool PingFlag,string defaultText = null)
         {
             if (!string.IsNullOrEmpty(textBox.Text))
             {
@@ -201,12 +148,12 @@ namespace Remote
 
                 ParseTextBoxContent(textBox.Text, out ip, out port, out username, out password, defaultText);
                 addr = ip + ":" + port;
-                label.Text = addr;
 
-                if (SSHFlag &&  PingFlag)
+                // 如果上次没有Ping通
+                if (!PingFlag)
                 {
-                    int delay = await MeasureTcpPingExecutionTime(addr, timeoutMilliseconds: 1000);
-                    if (delay < 500 && delay > 0)
+                    int delay = await MeasureTcpPingExecutionTime(addr, timeoutMilliseconds: TimeInterval);
+                    if (delay < TimeInterval && delay >= 0)
                     {
                         label.Text = $"{addr}   {delay}ms";
                         return PingFlag = true; // 如果 ping 成功，设置标志为 true
@@ -216,95 +163,34 @@ namespace Remote
                         label.Text = $"{addr}  close";
                         return PingFlag = false; // 如果 ping 失败，设置标志为 false
                     }
-                    //Console.WriteLine("SSH Print");
                 }
-                else if (!SSHFlag || defaultText != "SSH")
+                else
                 {
-                    int delay = await MeasureTcpPingExecutionTime(addr, timeoutMilliseconds: 1000);
-                    if (delay < 500 && delay > 0)
-                    {
-                        label.Text = $"{addr}   {delay}ms";
-                        return PingFlag = true; // 如果 ping 成功，设置标志为 true
-                    }
-                    else
-                    {
-                        label.Text = $"{addr}  close";
-                         return  PingFlag = false; // 如果 ping 失败，设置标志为 false
-                    }
+                    return true;
                 }
             }
             else
             {
                 label.Text = defaultText ?? textBox.Name;
             }
-            await Task.Delay(1000);
-
             return false;
         }
 
         // 计时器定时执行代码，持续TcpPing
         private async void Timer_Tick(object sender, EventArgs e)
         {
-            await HandleTextBoxAsync(RDPtextBox1, RDPLabel1,"1");
-            await HandleTextBoxAsync(RDPtextBox2, RDPLabel2,"2");
-            await HandleTextBoxAsync(RDPtextBox3, RDPLabel3,"3");
-            await HandleTextBoxAsync(RDPtextBox4, RDPLabel4,"4");
-            if(SSHFlag && SSHLowPingFlag)
+            _ = await HandleTextBoxAsync(RDPtextBox1, RDPLabel1, false, "1");
+            _ = await HandleTextBoxAsync(RDPtextBox2, RDPLabel2, false, "2");
+            _ = await HandleTextBoxAsync(RDPtextBox3, RDPLabel3, false, "3");
+            _ = await HandleTextBoxAsync(RDPtextBox4, RDPLabel4, false, "4");
+            lastPingSuccess1 = await HandleTextBoxAsync(SSHtextBox1, SSHLabel1, lastPingSuccess1, SSHFlag ? "SSH" : "RDP");
+            lastPingSuccess2 = await HandleTextBoxAsync(SSHtextBox2, SSHLabel2, lastPingSuccess2, SSHFlag ? "SSH" : "RDP");
+            if(!SSHLowPingFlag)
             {
-                if (!lastPingSuccess1)
-                {
-                    lastPingSuccess1 = await HandleTextBoxAsyncBySSH(SSHtextBox2, SSHLabel2, lastPingSuccess1, SSHFlag ? "SSH" : "RDP");
-                }
-                if (!lastPingSuccess2) { 
-                    lastPingSuccess2 = await HandleTextBoxAsyncBySSH(SSHtextBox1, SSHLabel1, lastPingSuccess2, SSHFlag ? "SSH" : "RDP"); 
-                }
+                lastPingSuccess1 = false;
+                lastPingSuccess2 = false;
 
             }
-            else
-            {
-                await HandleTextBoxAsync(SSHtextBox2, SSHLabel2, SSHFlag ? "SSH" : "RDP");
-                await HandleTextBoxAsync(SSHtextBox1, SSHLabel1, SSHFlag ? "SSH" : "RDP");
-            }
-        }
-
-        // 加密密码
-        public static string ConvertFromSecureString(string passwd)
-        {
-            string key = "passwd IsNullOrEmpty";
-            string command = $"powershell.exe -command \"($securePwd = ConvertTo-SecureString -AsPlainText -Force '{passwd}') | ConvertFrom-SecureString\"";
-            string encryptedString = ExecuteCommand(command).Trim();
-
-
-            if (!string.IsNullOrEmpty(encryptedString))
-            {
-                key = "51:b:" + encryptedString.Trim();
-            }
-            return key;
-        }
-
-        // 执行CMD命令
-        public static string ExecuteCommand(string command)
-        {
-            string output = string.Empty;
-
-            Process process = new Process();
-            process.StartInfo.FileName = "cmd.exe";
-            process.StartInfo.Arguments = "/c " + command;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.CreateNoWindow = true;
-
-            process.Start();
-
-            // 读取进程的输出流
-            using (System.IO.StreamReader reader = process.StandardOutput)
-            {
-                output = reader.ReadToEnd();
-            }
-
-            process.WaitForExit();
-
-            return output;
         }
 
         // 去除中文字符和空行
@@ -313,6 +199,7 @@ namespace Remote
             // 保留英文字符和数字，去除中文字符和符号
             return Regex.Replace(input, @"[^\x00-\x7F]+", "").Trim();
         }
+
         // 判断是否是空行
         public static bool IsNullOrEmptyOrWhitespace(string value)
         {
@@ -329,7 +216,7 @@ namespace Remote
 
             // 去除空行
             line = line.Replace("\r", "").Replace("\n", "");
-
+            
             // 判断是否只有一行
             if (line.Contains("\n"))
             {
@@ -366,6 +253,23 @@ namespace Remote
             // 如果匹配不成功，返回标识
             return false;
         }
+       
+        public  void ParseResolution(string Resolution,out  int width,out  int height)
+        {
+            width = Properties.Settings.Default.width;
+            height = Properties.Settings.Default.height;
+            try
+            {
+                // 使用 Split 方法按 "x" 分割字符串
+                string[] dimensions = Resolution.Split('x');
+                width = int.Parse(dimensions[0]);
+                height = int.Parse(dimensions[1]);
+            }
+            catch
+            {
+                MessageBox.Show($"分辨率参数有误", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
+            }
+        }
         // 解析字符串
         public static void ParseTextBoxContent(string textBoxContent, out string ip, out string port, out string username, out string password, string defaultPort = "3389")
         {
@@ -374,13 +278,22 @@ namespace Remote
             string oneLineText = textBoxContent;
             ip = "";
             port = "";
-            
+
+            // 判断并去除前后的双引号
+            if (textBoxContent.StartsWith("\"") && textBoxContent.EndsWith("\""))
+            {
+                // 使用 TrimStart 和 TrimEnd 方法去除前后的双引号
+                textBoxContent = textBoxContent.Substring(1,textBoxContent.Length-2);
+                oneLineText = textBoxContent;
+            }
 
             // 将字符串按照换行符切割分别传入lines数组中
             string[] lines = textBoxContent.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
             //Console.WriteLine(lines.Length);
             if(lines.Length == 1)
             {
+                
+                //Console.WriteLine("单行模式");
                 // 尝试从单行提取信息
                 if (TryExtractInfoFromSingleLine(oneLineText, out ip,out port, out username, out password,  defaultPort))
                 {
@@ -393,6 +306,7 @@ namespace Remote
             // 从第一行开始处理
             foreach (var line in lines)
             {
+                //Console.WriteLine("多行模式");
                 // 清除空行和中文字符和符号
                 string cleanedLine = RemoveChineseAndTrim(line);
 
@@ -426,9 +340,41 @@ namespace Remote
             //Console.WriteLine($"Host: {ip}:{port}, Username: {username}, Password: {password}");
         }
 
+        // 执行CMD命令
+        public static string ExecuteCommand(string command)
+        {
+            string output = string.Empty;
 
+            Process process = new Process();
+            process.StartInfo.FileName = "cmd.exe";
+            process.StartInfo.Arguments = "/c " + command;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
 
+            process.Start();
 
+            // 读取进程的输出流
+            using (System.IO.StreamReader reader = process.StandardOutput)
+            {
+                output = reader.ReadToEnd();
+            }
+            process.WaitForExit();
+            return output;
+        }
+
+        // 加密密码
+        public static string ConvertFromSecureString(string passwd)
+        {
+            string key = "passwd IsNullOrEmpty";
+            string command = $"powershell.exe -command \"($securePwd = ConvertTo-SecureString -AsPlainText -Force '{passwd}') | ConvertFrom-SecureString\"";
+            string encryptedString = ExecuteCommand(command).Trim();
+            if (!string.IsNullOrEmpty(encryptedString))
+            {
+                key = "51:b:" + encryptedString.Trim();
+            }
+            return key;
+        }
 
         // 生成RDP文件
         public static void GenerateRdpFile(string fullAddress, string username, string password)
@@ -439,45 +385,80 @@ namespace Remote
             {
                 // 创建文件夹
                 Directory.CreateDirectory(configFolderPath);
-
-               
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"发生错误：{ex.Message}");
             }
-
+            
             // 创建 RDP 文件路径
             string rdpFilePath = Path.Combine(configFolderPath, fullAddress.Split(':')[0] + ".rdp");
-
+            string screenMode = fullScreenFlag ? "0" : "1";
+            string windowspositionText = windowsposition ? "winposstr:s:0,0,0,0,3840,2160" : "winposstr:s:1920,0,1920,1080,3840,2160";
+            // winposstr:s:1920,0,1920,1080,3840,2160
+            // winposstr:s:0,0,0,0,3840,2160
             // 设置 RDP 文件的内容
-            string rdpFileContent = $@"desktopwidth:i:1180
-desktopheight:i:720
-session bpp:i:32
-winposstr:s:0,1,2000,0,3840,795
-compression:i:1
-keyboardhook:i:2
-audiomode:i:0
-authentication level:i:0
-redirectdrives:i:0
-redirectprinters:i:1
-redirectcomports:i:0
-redirectsmartcards:i:1
-displayconnectionbar:i:1
-autoreconnection enabled:i:1
-domain:s:
-alternate shell:s:
+            string rdpFileContent = $@"domain:s:
+alternate shell:s: 
 shell working directory:s:
+compression:i:1
+authentication level:i:0
+desktopwidth:i:{width}
+desktopheight:i:{height}
+session bpp:i:32
+{windowspositionText}
+bitmapcachepersistenable:i:1
+autoreconnection enabled:i:1
+keyboardhook:i:2
+displayconnectionbar:i:1
 disable wallpaper:i:1
-disable full window drag:i:1
 disable menu anims:i:1
 disable themes:i:0
 disable cursor setting:i:0
-bitmapcachepersistenable:i:1
+disable full window drag:i:1
+audiomode:i:0
+redirectdrives:i:0
+redirectprinters:i:1
+redirectcomports:i:0
+redirectsmartcards:i:0
 screen mode id:i:{screenMode}
 full address:s:{fullAddress}
 username:s:{username}
 password {password}";
+
+            /*
+             * domain:s:                          指定登录远程计算机的用户帐户所在域的名称
+             * alternate shell:s:                 不清楚用途，官网说明是指定要在远程会话中作为 shell（而不是资源管理器）自动启动的程序。
+             * shell working directory:s:         指定备用 shell 时要使用的远程计算机上的工作目录。
+             * compression:i:1                    通过 RDP 传输到本地计算机时是否启用批量压缩。 1 压缩  0 不压缩
+             * authentication level:i:0           是否验证CA证书  0 不验证
+             * 
+             * desktopwidth:i:                    水平分辨率
+             * desktopheight:i:                   垂直分辨率
+             * session bpp:i:32                   颜色深度为32
+             * winposstr:s:0,1,2000,0,3840,795    指定客户端计算机上会话窗口的位置和尺寸
+             * bitmapcachepersistenable:i:1       确定位图是否缓存在本地计算机上（基于磁盘的缓存）。 位图缓存可以提高远程会话的性能。  1 缓存
+             * displayconnectionbar:i:1           全屏模式下是否显示顶部连接栏  0 不显示 1显示
+             * disable wallpaper:i:1              禁用壁纸
+             * disable menu anims:i:1             禁用菜单动画       
+             * disable themes:i:0                 禁用主题           
+             * disable cursor setting             禁用光标 
+             * disable full window drag:i:1       拖动时显示窗口的轮廓   0 显示窗口的内容
+             * audiomode:i:0                      本地或远程计算机是否播放音频   0 本地机器播放声音 1 远程机器上播放声音 2 不播放声音  
+             * 
+             * redirectdrives:i:0                 是否将本地磁盘映射到远程机器
+             * redirectprinters:i:1               打印机重定向
+             * redirectcomports:i:0               串口重定向
+             * redirectsmartcards:i:0             智能卡重定向
+             * 
+             * autoreconnection enabled:i:1       连接端口时是否尝试重新连接
+             * keyboardhook:i:2                   是否支持Win、Alt、Tab 组合键   0 不支持 1 处于焦点时  2 仅全屏时 3 仅RemoteAPP支持
+             * 
+             * full address:s:                    是否全屏 
+             * username:s:                        远程用户名
+             * password                           远程用户密码
+             */
+
 
             // 写入内容到 RDP 文件
             File.WriteAllText(rdpFilePath, rdpFileContent);
@@ -496,40 +477,6 @@ password {password}";
             // 等待远程桌面连接工具关闭
             //process.WaitForExit();
         }
-
-        private void deleteRDPList()
-        {
-            string folderPath = RDPFileName; // 指定文件夹路径
-
-            // 检查文件夹是否存在
-            if (Directory.Exists(folderPath))
-            {
-                // 获取文件夹中所有的RDP文件
-                string[] rdpFiles = Directory.GetFiles(folderPath, "*.rdp");
-
-                // 遍历并删除所有RDP文件
-                foreach (string rdpFilePath in rdpFiles)
-                {
-                    try
-                    {
-                        // 删除文件
-                        File.Delete(rdpFilePath);
-                        Console.WriteLine($"Deleted: {rdpFilePath}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Failed to delete {rdpFilePath}: {ex.Message}");
-                    }
-                }
-            }
-            else
-            {
-                Console.WriteLine("Folder does not exist.");
-            }
-
-            Console.WriteLine("Operation completed.");
-        }
-
 
         private void HandleSSHLogin(TextBox textBox)
         {
@@ -550,8 +497,8 @@ password {password}";
                     }
                     else
                     {
+                        MessageBox.Show($"SSH信息错误", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
                         
-                        MessageBox.Show("SSH信息错误", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
                 else
@@ -560,215 +507,59 @@ password {password}";
                 }
             }
         }
+       
+        private void StartSSH(string ip, string port, string username, string password)
+        {
+            SSHMethod = Properties.Settings.Default.SSHMethodFlag;
+            string SSHClientPath = string.Empty;
+            string SSHClientArgs = string.Empty;
+            if (SSHMethod == "Putty")
+            {
+               SSHClientPath = "putty";
+               SSHClientArgs = $"-ssh -l {username} -pw \"{password}\" -P {port} {ip}";
+            }
+            else if (SSHMethod == "Xshell")
+            {
+               SSHClientPath = "xshell";
+               SSHClientArgs = $"ssh {username}:{password}@{ip}:{port}";
+            }
+            ProcessStartInfo SSHStartInfo = new ProcessStartInfo
+            {
+                FileName = SSHClientPath,
+                Arguments = SSHClientArgs,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = false
+            };
+            try
+            {
+                // 启动 PuTTY
+                Process puttyProcess = new Process
+                {
+                    StartInfo = SSHStartInfo
+                };
+                puttyProcess.Start();
 
-        // 执行远程连接
-        // private BackgroundWorker rdpWorker;
-        // private Thread sshThread;
+                puttyProcess.WaitForExit();
+                puttyProcess.Close();
+            }
+            catch (Exception)
+            {
+
+                MessageBox.Show($"未安装 {SSHMethod}，请在设置中选择其他客户端", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
+            }
+        }
+
         private Thread rdpThread;
-
         public void GenerateAndExecuteRdpFileAsync(TextBox textBox)
         {
             if (rdpThread == null || !rdpThread.IsAlive)
             {
                 rdpThread = new Thread(() => GenerateAndExecuteRdpFile(textBox.Text));
                 rdpThread.Start();
-            }
-            flashFileList();
-        }
-        public static void ParseSSHText(string textBoxContent, out string ip, out string port, out string username, out string password)
-        {
-            ip = string.Empty;
-            port = "22";
-            string addr = string.Empty;
-            username = "root";
-            password = string.Empty;
-
-            // 将字符串按照换行符切割分别传入lines数组中
-            string[] lines = textBoxContent.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-
-            if (lines.Length == 1)
-            {
-                //string ipPortLine = RemoveChineseAndTrim(lines[0]);
-                Match ipPortMatch = Regex.Match(lines[0], @"(\d+\.\d+\.\d+\.\d+):(\d+)");
-                if (ipPortMatch.Success)
-                {
-                    ip = ipPortMatch.Groups[1].Value;
-                    port = ipPortMatch.Groups[2].Value;
-                    if (port == string.Empty)
-                    {
-                        port = "22";
-                    }
-
-                    addr = ip + ":" + port;
-
-
-                }
-                string[] passline = Regex.Split(lines[0], @"[：]");
-                if (passline.Length > 1)
-                {
-                    password = passline[passline.Length - 1];
-                }
-                return;
-            }
-            // 如果小于3行，则退出
-            if (lines.Length < 3 && addr == string.Empty)
-            {
-                return;
-            }
-
-            //清除中文和中文符号
-            for (int i = 0; i < lines.Length; i++)
-            {
-                RemoveChineseAndTrim(lines[i]);
-            }
-            // 确认IP的行号
-            int startIndex = 0;
-            while (startIndex < lines.Length && IsNullOrEmptyOrWhitespace(lines[startIndex]))
-            {
-                startIndex++;
-            }
-
-            if (startIndex + 2 > lines.Length)
-            {
-                string ipPortLine = RemoveChineseAndTrim(lines[startIndex]);
-                // addr = RemoveChineseAndTrim(lines[startIndex]);
-                string usernameLine = "root";
-                string passwordLine = "root";
-
-                // 提取 IP 和端口
-
-                Match ipPortMatch = Regex.Match(ipPortLine, @"(\d+\.\d+\.\d+\.\d+):(\d+)");
-                if (ipPortMatch.Success)
-                {
-
-                    ip = ipPortMatch.Groups[1].Value;
-                    port = ipPortMatch.Groups[2].Value;
-                    if (port == string.Empty)
-                    {
-                        port = "22";
-                    }
-
-                    addr = ip + ":" + port;
-                }
-                else
-                {
-                    ipPortMatch = Regex.Match(ipPortLine, @"(\d+\.\d+\.\d+\.\d+)");
-                    if (ipPortMatch.Success)
-                    {
-
-                        ip = ipPortMatch.Groups[1].Value;
-
-                        addr = ip + ":" + port;
-                    }
-
-                }
-
-                // 提取用户名和密码
-                username = usernameLine;
-                password = passwordLine;
-
-            }
-            else if (startIndex + 2 < lines.Length)
-            {
-                string ipPortLine = RemoveChineseAndTrim(lines[startIndex]);
-                // addr = RemoveChineseAndTrim(lines[startIndex]);
-                string usernameLine = RemoveChineseAndTrim(lines[startIndex + 1]);
-                string passwordLine = RemoveChineseAndTrim(lines[startIndex + 2]);
-
-                // 提取 IP 和端口
-
-                Match ipPortMatch = Regex.Match(ipPortLine, @"(\d+\.\d+\.\d+\.\d+):(\d+)");
-                if (ipPortMatch.Success)
-                {
-
-                    ip = ipPortMatch.Groups[1].Value;
-                    port = ipPortMatch.Groups[2].Value;
-
-                    addr = ip + ":" + port;
-                }
-                else
-                {
-                    ipPortMatch = Regex.Match(ipPortLine, @"(\d+\.\d+\.\d+\.\d+)");
-                    if (ipPortMatch.Success)
-                    {
-
-                        ip = ipPortMatch.Groups[1].Value;
-
-                        addr = ip + ":" + port;
-                    }
-
-                }
-
-                // 提取用户名和密码
-                username = usernameLine;
-                password = passwordLine;
+                
             }
         }
-        private void StartSSH(string ip, string port, string username, string password)
-        {
-            SSHMethod = Properties.Settings.Default.SSHMethodFlag;
-            if (SSHMethod == "Putty")
-            {
-                string puttyPath = "putty";
-                string puttyArgs = $"-ssh -l {username} -pw \"{password}\" -P {port} {ip}";
-                ProcessStartInfo puttyStartInfo = new ProcessStartInfo
-                {
-                    FileName = puttyPath,
-                    Arguments = puttyArgs,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = false
-                };
-                try
-                {
-                    // 启动 PuTTY
-                    Process puttyProcess = new Process
-                    {
-                        StartInfo = puttyStartInfo
-                    };
-                    puttyProcess.Start();
-
-                    puttyProcess.WaitForExit();
-                    puttyProcess.Close();
-                }
-                catch (Exception)
-                {
-                    
-                    MessageBox.Show($"环境变量中未找到Putty", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
-                }
-            }else if(SSHMethod == "Xshell")
-            {
-                string xshellPath = "xshell";
-                string xshellArgs = $"ssh {username}:{password}@{ip}:{port}";
-                ProcessStartInfo XshellStartInfo = new ProcessStartInfo
-                {
-                    FileName = xshellPath,
-                    Arguments = xshellArgs,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = false
-                };
-                try
-                {
-                    // 启动 PuTTY
-                    Process XshellProcess = new Process
-                    {
-                        StartInfo = XshellStartInfo
-                    };
-                    XshellProcess.Start();
-
-                    XshellProcess.WaitForExit();
-                    XshellProcess.Close();
-                }
-                catch (Exception)
-                {
-                    MessageBox.Show($"环境变量中未找到Xshell", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
-                }
-            }
-        }
-
-
-
         private void GenerateAndExecuteRdpFile(string textBoxContent)
         {
             string ip,port;
@@ -781,63 +572,168 @@ password {password}";
             //Console.WriteLine($"Host: {addr}, Username: {username}, Password: {password}");
 
             string encryptedPassword = ConvertFromSecureString(password);
-            // 生成 RDP 文件
-            GenerateRdpFile(addr, username, encryptedPassword);
-
-            // 执行 RDP 文件
-            string rdpFilePath = Path.Combine(Path.Combine(Environment.CurrentDirectory, RDPFileName), ip + ".rdp");
-            ExecuteRdpFile(rdpFilePath);
+            try
+            {
+                // 生成 RDP 文件
+                GenerateRdpFile(addr, username, encryptedPassword);
+                
+                // 执行 RDP 文件
+                string rdpFilePath = Path.Combine(Path.Combine(Environment.CurrentDirectory, RDPFileName), ip + ".rdp");
+                ExecuteRdpFile(rdpFilePath);
+            }
+            catch (Exception)
+            {
+                
+                MessageBox.Show($"运行RDP文件出错，请检查输入格式是否正确", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
+            }
         }
 
-        public string ConfigFolderPath { get; private set; }
+        // 计算TCPPing延迟
+        static async Task<int> MeasureTcpPingExecutionTime(string host, int timeoutMilliseconds)
+        {
+            Stopwatch stopwatch = new Stopwatch();
+
+            // 启动计时器
+            stopwatch.Start();
+
+            // 执行TcpPing方法，并获取延迟时间
+            bool delay = await TcpPing(host, timeoutMilliseconds);
+            
+            // 停止计时器
+            stopwatch.Stop();
+            if (delay) {
+                // 输出TcpPing方法执行时间
+                //Console.WriteLine($"TcpPing方法执行时间: {stopwatch.ElapsedMilliseconds} 毫秒");
+                // 返回延迟时间
+                return (int)stopwatch.ElapsedMilliseconds;
+            }
+            else
+            {
+                return timeoutMilliseconds + 100;
+            }
+            
+        }
+        static async Task<bool> TcpPing(string host, int timeoutMilliseconds)
+        {
+            string pattern = @"^\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}\b$";
+            Regex regex = new Regex(pattern);
+            if (!regex.IsMatch(host))
+            {
+                return false;
+            }
 
 
-        public List<string> GetConfigFiles()
+            string[] parts = host.Split(':');
+            string ipaddr = parts[0];
+            int port = int.Parse(parts[1]);
+
+            using (TcpClient tcpClient = new TcpClient())
+            {
+                var connectTask = tcpClient.ConnectAsync(ipaddr, port);
+
+                var delayTask = Task.Delay(timeoutMilliseconds);
+
+                // 使用 Task.WhenAny 来等待首先完成的任务（连接成功或超时）
+                var completedTask = await Task.WhenAny(connectTask, delayTask);
+
+                // 如果连接任务完成，则返回连接状态；否则，表示超时，返回连接失败
+                if (completedTask == connectTask && tcpClient.Connected)
+                {
+                    return true; // 连接成功，端口开放
+                }
+                else
+                {
+                    return false; // 连接失败，端口关闭或主机不可达
+                }
+            }
+        }
+
+        private void RDPButton1_Click(object sender, EventArgs e)
+        {
+            if (RDPtextBox1.Text.Length > 0){GenerateAndExecuteRdpFileAsync(RDPtextBox1);}
+            flashHistoryList();
+
+        }
+        private void RDPButton2_Click(object sender, EventArgs e)
+        {
+            if (RDPtextBox2.Text.Length > 0) { GenerateAndExecuteRdpFileAsync(RDPtextBox2); }
+            flashHistoryList();
+        }
+
+        private void RDPButton3_Click(object sender, EventArgs e)
+        {
+            if (RDPtextBox3.Text.Length > 0) { GenerateAndExecuteRdpFileAsync(RDPtextBox3); }
+            flashHistoryList();
+        }
+
+        private void RDPButton4_Click(object sender, EventArgs e)
+        {
+            if (RDPtextBox4.Text.Length > 0) { GenerateAndExecuteRdpFileAsync(RDPtextBox4); }
+            flashHistoryList();
+        }
+
+        private void SSHButton1_Click(object sender, EventArgs e)
+        {
+
+            HandleSSHLogin(SSHtextBox1);
+        }
+
+        private void SSHButton2_Click(object sender, EventArgs e)
+        {
+
+            HandleSSHLogin(SSHtextBox2);
+        }
+
+        // 获取默认账密名
+        private void LoadDefaultPassNameToComboBox(ComboBox comboBox, string filePath)
         {
             try
             {
-                // 检查 .config 文件夹是否存在，如果不存在则创建
-                if (!Directory.Exists(ConfigFolderPath))
+                using (StreamReader reader = new StreamReader(filePath))
                 {
-                    Directory.CreateDirectory(ConfigFolderPath);
-                }
-
-                // 获取 .config 文件夹中的文件列表
-                string[] fileList = Directory.GetFiles(ConfigFolderPath, "*.rdp");
-                List<string> cleanedFileList = new List<string>();
-                foreach (string filePath in fileList)
-                {
-                    string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filePath);
-                    if (fileNameWithoutExtension != string.Empty && fileNameWithoutExtension != filePath)
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
                     {
-                        // 使用不包含扩展名的文件名
-                        cleanedFileList.Add(fileNameWithoutExtension);
+                        if (line.StartsWith("[") && line.EndsWith("]"))
+                        {
+                            // 去除括号，将section添加到ComboBox的Items集合中
+                            string sectionName = line.Trim('[', ']');
+                            comboBox.Items.Add(sectionName);
+                        }
                     }
+                    if (DefaultPassConnComboBox.Items.Count > 0) { DefaultPassConnComboBox.Text = (string)DefaultPassConnComboBox.Items[0]; }
                 }
-                //// 只保留文件名，去除路径和后缀名
-                //for (int i = 0; i < fileList.Length; i++)
-                //{
-                //    string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(fileList[i]);
-                //    if (fileNameWithoutExtension == string.Empty || fileNameWithoutExtension == fileList[i])
-                //    {
-                //        // 文件名为空或者与原始文件路径相同，表示没有文件名，使用文件路径作为文件名
-                //        fileList[i] = Path.GetFileName(fileList[i]);
-                //    }
-                //    else
-                //    {
-                //        // 使用不包含扩展名的文件名
-                //        fileList[i] = fileNameWithoutExtension;
-                //    }
-                //}
-                return cleanedFileList;
             }
             catch (Exception ex)
             {
-                // 处理异常情况
-                MessageBox.Show($"获取文件列表时发生错误：{ex.Message}");
-                return new List<string>(); // 返回空数组
+                Console.WriteLine(ex.Message);
             }
         }
+
+        private void HistoryConnButton_Click(object sender, EventArgs e)
+        {
+            if (HistoryComboBox.Text.Length > 0)
+            {
+                string trimmedString = HistoryComboBox.Text.Trim();
+                string rdpFilePath = Path.Combine(Path.Combine(Environment.CurrentDirectory, RDPFileName), trimmedString + ".rdp");
+                UpdateScreenModeId(rdpFilePath, FullScreenCheck.Checked);
+                ExecuteRdpFile(rdpFilePath);
+                // flashFileList();
+            }
+            // 执行 RDP 文件
+
+        }
+        // 获取历史列表
+        private void flashHistoryList()
+        {
+            List<string> fileList = GetConfigFilesSortedByDate();
+            // 将文件列表绑定到 ListBox
+            HistoryComboBox.DataSource = fileList;
+            if(fileList.Count > 0) {
+                HistoryComboBox.Text= fileList[0];
+            }
+        }
+        // 遍历目录下的RDP文件
         public List<string> GetConfigFilesSortedByDate()
         {
             try
@@ -882,162 +778,15 @@ password {password}";
 
                 return sortedFileList;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // 处理异常情况
-                MessageBox.Show($"获取文件列表时发生错误：{ex.Message}");
+                MessageBox.Show($"获取文件列表时发生错误", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
                 return new List<string>(); // 返回空数组
             }
         }
 
-
-        static async Task<bool> TcpPing(string host, int timeoutMilliseconds)
-        {
-            string pattern = @"^\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}\b$";
-            Regex regex = new Regex(pattern);
-            if (!regex.IsMatch(host))
-            {
-                return false;
-            }
-
-
-            string[] parts = host.Split(':');
-            string ipaddr = parts[0];
-            int port = int.Parse(parts[1]);
-
-            using (TcpClient tcpClient = new TcpClient())
-            {
-                var connectTask = tcpClient.ConnectAsync(ipaddr, port);
-
-                var delayTask = Task.Delay(timeoutMilliseconds);
-
-                // 使用 Task.WhenAny 来等待首先完成的任务（连接成功或超时）
-                var completedTask = await Task.WhenAny(connectTask, delayTask);
-
-                // 如果连接任务完成，则返回连接状态；否则，表示超时，返回连接失败
-                if (completedTask == connectTask && tcpClient.Connected)
-                {
-                    return true; // 连接成功，端口开放
-                }
-                else
-                {
-                    return false; // 连接失败，端口关闭或主机不可达
-                }
-            }
-        }
-
-        static async Task<int> MeasureTcpPingExecutionTime(string host, int timeoutMilliseconds)
-        {
-            Stopwatch stopwatch = new Stopwatch();
-
-            // 启动计时器
-            stopwatch.Start();
-
-            // 执行TcpPing方法，并获取延迟时间
-            bool delay = await TcpPing(host, timeoutMilliseconds);
-
-            // 停止计时器
-            stopwatch.Stop();
-
-            // 输出TcpPing方法执行时间
-            //Console.WriteLine($"TcpPing方法执行时间: {stopwatch.ElapsedMilliseconds} 毫秒");
-
-            // 返回延迟时间
-            return (int)stopwatch.ElapsedMilliseconds;
-        }
-
-
-
-
-
-
-
-        private void RDPButton1_Click(object sender, EventArgs e)
-        {
-            if (RDPtextBox1.Text.Length > 0)
-            {
-                GenerateAndExecuteRdpFileAsync(RDPtextBox1);
-            }
-
-        }
-        private void RDPButton2_Click(object sender, EventArgs e)
-        {
-            if (RDPtextBox2.Text.Length > 0) { GenerateAndExecuteRdpFileAsync(RDPtextBox2); }
-
-
-        }
-
-        private void RDPButton3_Click(object sender, EventArgs e)
-        {
-            if (RDPtextBox3.Text.Length > 0) { GenerateAndExecuteRdpFileAsync(RDPtextBox3); }
-
-        }
-
-        private void RDPButton4_Click(object sender, EventArgs e)
-        {
-            if (RDPtextBox4.Text.Length > 0) { GenerateAndExecuteRdpFileAsync(RDPtextBox4); }
-
-
-        }
-
-        private void SSHButton1_Click(object sender, EventArgs e)
-        {
-
-            HandleSSHLogin(SSHtextBox1);
-        }
-
-        private void SSHButton2_Click(object sender, EventArgs e)
-        {
-
-            HandleSSHLogin(SSHtextBox2);
-        }
-
-        private void flashFileList()
-        {
-            // 获取执行文件目录下 .config 文件夹中的文件列表
-            // List<string> fileList = GetConfigFiles();
-            List<string> fileList = GetConfigFilesSortedByDate();
-            // 将文件列表绑定到 ListBox
-            HistoryComboBox.DataSource = fileList;
-        }
-
-        public static void ExecuteSshConnectionLinux(string ipAddress)
-        {
-            // 根据输入判断是否包含端口号
-            int defaultPort = 22;
-            string[] parts = ipAddress.Split(':');
-            string ip = parts[0].Trim();
-            int port = parts.Length > 1 ? int.Parse(parts[1].Trim()) : defaultPort;
-
-            // 构造 SSH 命令
-            string sshCommand = $"ssh root@{ip} -p {port} -o StrictHostKeyChecking=no";
-
-            // 执行 SSH 命令
-            Process process = new Process();
-            process.StartInfo.FileName = "cmd"; // 终端程序的名称
-            process.StartInfo.Arguments = "/c " + sshCommand; // 使用 -e 参数来执行 SSH 命令
-            process.Start();
-
-            // 等待远程连接工具关闭
-            //process.WaitForExit();
-        }
-
-
-
-
-        private void HistoryConnButton_Click(object sender, EventArgs e)
-        {
-            if (HistoryComboBox.Text.Length > 0)
-            {
-                string trimmedString = HistoryComboBox.Text.Trim();
-                string rdpFilePath = Path.Combine(Path.Combine(Environment.CurrentDirectory, RDPFileName), trimmedString + ".rdp");
-                UpdateScreenModeId(rdpFilePath, FullScreenCheck.Checked);
-                ExecuteRdpFile(rdpFilePath);
-                // flashFileList();
-            }
-            // 执行 RDP 文件
-
-        }
+        // 修改历史连接中的全屏选项
         public void UpdateScreenModeId(string filePath, bool isCheckboxChecked)
         {
             try
@@ -1079,93 +828,6 @@ password {password}";
             }
         }
 
-
-
-
-
-
-
-
-        public static string GetFirstSshFileName()
-        {
-            string rdpConfigFolderPath = Path.Combine(Environment.CurrentDirectory, RDPFileName);
-
-            // 检查 .RDPconfig 文件夹是否存在
-            if (!Directory.Exists(rdpConfigFolderPath))
-            {
-                // 如果文件夹不存在，返回空字符串或者抛出异常，根据需求决定
-                return string.Empty;
-            }
-
-            // 获取 .ssh 文件
-            string[] files = Directory.GetFiles(rdpConfigFolderPath, "*.ssh");
-            // 检查是否有文件
-            if (files.Length == 0)
-            {
-                // 如果没有文件，返回空字符串或者抛出异常，根据需求决定
-                return string.Empty;
-            }
-
-
-            // 返回第一个文件的名称（不包含路径部分）
-            string fileName = Path.GetFileName(files[0]);
-            string sshIP = fileName.Split('-')[0];
-            string sshPort = fileName.Split('-')[1].Split('.')[0];
-
-            //// 查找 ".ssh" 的位置
-            //int indexOfDotSsh = fileName.IndexOf(".ssh");
-
-            //// 如果找到 ".ssh"，截取从索引 0 到 indexOfDotSsh 的部分
-            //// 如果没有找到 ".ssh"，截取整个字符串
-            //string ipAddress = indexOfDotSsh >= 0 ? fileName.Substring(0, indexOfDotSsh) : fileName;
-
-            return sshIP + ":" + sshPort;
-        }
-        // 生成RDP文件
-        public static void GenerateSSHFile(string fullAddress)
-        {
-            // 创建 .config 文件夹（如果不存在）
-            string configFolderPath = Path.Combine(Environment.CurrentDirectory, RDPFileName);
-            Directory.CreateDirectory(configFolderPath);
-
-
-            // 解析 IP 和端口号
-            string[] addressParts = fullAddress.Split(':');
-            string ipAddress = addressParts[0];
-            string port = (addressParts.Length > 1) ? addressParts[1] : "22";
-
-            // 创建 SSH 文件路径
-            string sshFilePath = Path.Combine(configFolderPath, $"{ipAddress}-{port}.ssh");
-
-            // 设置 SSH 文件的内容
-            string sshFileContent = "";
-
-            // 写入内容到 SSH 文件
-            File.WriteAllText(sshFilePath, sshFileContent);
-        }
-        public static void DeleteSingleSshFile()
-        {
-            string rdpConfigFolderPath = Path.Combine(Environment.CurrentDirectory, RDPFileName);
-
-            // 检查 .RDPconfig 文件夹是否存在
-            if (!Directory.Exists(rdpConfigFolderPath))
-            {
-                // 如果文件夹不存在，则没有 .ssh 文件需要删除
-                return;
-            }
-
-            // 获取 .ssh 文件
-            string[] sshFiles = Directory.GetFiles(rdpConfigFolderPath, "*.ssh");
-
-            // 检查是否只有一个 .ssh 文件
-            if (sshFiles.Length == 1)
-            {
-                // 删除 .ssh 文件
-                File.Delete(sshFiles[0]);
-                Console.WriteLine("Deleted the single .ssh file.");
-            }
-        }
-
         // 默认账密连接
         private void DefaultPassConnButton_Click(object sender, EventArgs e)
         {
@@ -1198,140 +860,12 @@ password {password}";
             // 执行 RDP 文件
             string rdpFilePath = Path.Combine(Path.Combine(Environment.CurrentDirectory, RDPFileName), addr.Split(':')[0] + ".rdp");
             ExecuteRdpFile(rdpFilePath);
-
-
-        }
-
-
-
-        private void groupBox2_Enter(object sender, EventArgs e)
-        {
-
-        }
-
-        private void textBox1_TextChanged(object sender, EventArgs e)
-        {
-
-        }
-
-
-
-
-
-        static Dictionary<string, Dictionary<string, string>> ReadIniFile(string filePath)
-        {
-            Dictionary<string, Dictionary<string, string>> iniData = new Dictionary<string, Dictionary<string, string>>();
-            string currentSection = "";
-            Dictionary<string, string> currentSectionData = null;
-
-            foreach (string line in File.ReadLines(filePath))
-            {
-                if (line.StartsWith("[") && line.EndsWith("]"))
-                {
-                    currentSection = line.Trim('[', ']');
-                    currentSectionData = new Dictionary<string, string>();
-                    iniData[currentSection] = currentSectionData;
-                }
-                else if (currentSectionData != null && line.Contains("="))
-                {
-                    string[] parts = line.Split('=');
-                    if (parts.Length == 2)
-                    {
-                        string key = parts[0].Trim();
-                        string value = parts[1].Trim();
-                        currentSectionData[key] = value;
-                    }
-                }
-            }
-            return iniData;
-        }
-
-
-        // 获取历史连接列表
-        private void LoadSectionsToComboBox(ComboBox comboBox, string filePath)
-        {
-            try
-            {
-                using (StreamReader reader = new StreamReader(filePath))
-                {
-                    string line;
-                    while ((line = reader.ReadLine()) != null)
-                    {
-                        if (line.StartsWith("[") && line.EndsWith("]"))
-                        {
-                            // 去除括号，将section添加到ComboBox的Items集合中
-                            string sectionName = line.Trim('[', ']');
-                            comboBox.Items.Add(sectionName);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Error: " + ex.Message);
-            }
-        }
-
-
-
-        private void TcpPingCheck_CheckedChanged(object sender, EventArgs e)
-        {
-            if (TcpPingCheck.Checked)
-            {
-                timer.Enabled = true;
-                lastPingSuccess1 = false;
-                lastPingSuccess2 = false;
-                tcpPingFlag = TcpPingCheck.Checked;
-                Properties.Settings.Default.tcpPingFlag = TcpPingCheck.Checked;
-                Properties.Settings.Default.Save();
-                
-            }
-            else
-            {
-                timer.Enabled = false;
-                RDPLabel1.Text = "1";
-                RDPLabel2.Text = "2";
-                RDPLabel3.Text = "3";
-                RDPLabel4.Text = "4";
-                if (SSHFlag)
-                {
-                    SSHLabel2.Text = "SSH";
-                    SSHLabel1.Text = "SSH";
-                }
-                else
-                {
-                    SSHLabel2.Text = "RDP";
-                    SSHLabel1.Text = "RDP";
-                }
-            }
-            tcpPingFlag = TcpPingCheck.Checked;
-            Properties.Settings.Default.tcpPingFlag = tcpPingFlag;
-            Properties.Settings.Default.Save();
-        }
-
-        private void FullScreenCheck_CheckedChanged(object sender, EventArgs e)
-        {
-            fullScreenFlag = FullScreenCheck.Checked;
-            screenMode = fullScreenFlag ? "0" : "1";
-            Properties.Settings.Default.fullScreenFlag = fullScreenFlag;
-        }
-        private void DeleteRDPCheck_CheckedChanged(object sender, EventArgs e)
-        {
-            deleteFlag = DeleteRDPCheck.Checked;
-            Properties.Settings.Default.deleteFlag = DeleteRDPCheck.Checked;
-            Properties.Settings.Default.Save();
-        }
-        private void TopMostCheck_CheckedChanged(object sender, EventArgs e)
-        {
-            this.TopMost = TopMostCheck.Checked;
-            topFlag = TopMostCheck.Checked;
-            Properties.Settings.Default.topFlag = topFlag;
         }
 
         private void OpenRDPListButton_Click(object sender, EventArgs e)
         {
             // 指定文件夹的路径
-            string folderPath = @".\.RDPconfig";
+            string folderPath = RDPFileName;
 
             try
             {
@@ -1346,63 +880,16 @@ password {password}";
         }
 
 
-
-
-  
-
-        private void ExitButton_Click(object sender, EventArgs e)
-        {
-            // 在退出按钮的Click事件中调用Close方法来关闭窗体
-            this.Close();
-        }
-
-
-        private void checkBox5_CheckedChanged(object sender, EventArgs e)
-        {
-            SSHLabel1.Text = SSHFlag ? "SSH" : "RDP";
-            SSHLabel2.Text = SSHFlag ? "SSH" : "RDP";
-        }
-
-
-
-
- 
-
-        private void button10_Click(object sender, EventArgs e)
-        {
-
-        }
-
-        private void button10_Click_1(object sender, EventArgs e)
-        {
-
-        }
-
         private void SSHtextBox2_TextChanged(object sender, EventArgs e)
         {
-            lastPingSuccess1 = false;
-        }
-        private void textBox4_TextChanged(object sender, EventArgs e)
-        {
-
-        }
-
-
-
-
-
-        private void label3_Click(object sender, EventArgs e)
-        {
-
+            lastPingSuccess2 = false;
         }
 
 
         private void SSHtextBox1_TextChanged(object sender, EventArgs e)
         {
-            lastPingSuccess2 = false;
+            lastPingSuccess1 = false;
         }
-
- 
 
         private void ClearTextBoxtButton_Click(object sender, EventArgs e)
         {
@@ -1416,51 +903,120 @@ password {password}";
 
         private void SettingButton_Click(object sender, EventArgs e)
         {
-            UpdateAttribute();
+            syncSystemVariables();
             OpenSettingsForm();
         }
-
-        // 更新系统属性
-        private void UpdateAttribute()
+        void deleteRDPList()
         {
-            Properties.Settings.Default.deleteFlag = deleteFlag;
-            Properties.Settings.Default.tcpPingFlag = tcpPingFlag;
-            Properties.Settings.Default.fullScreenFlag = fullScreenFlag;
-            Properties.Settings.Default.topFlag = topFlag;
-            //Properties.Settings.Default.SSHFlag = SSHFlag;
-            //Properties.Settings.Default.SSHMethodFlag = SSHMethod;
-            //Properties.Settings.Default.SSHLowPingFlag = SSHLowPingFlag;
-            Properties.Settings.Default.Save();
+            string folderPath = RDPFileName; // 指定文件夹路径
+
+            // 检查文件夹是否存在
+            if (Directory.Exists(folderPath))
+            {
+                // 获取文件夹中所有的RDP文件
+                string[] rdpFiles = Directory.GetFiles(folderPath, "*.rdp");
+
+                // 遍历并删除所有RDP文件
+                foreach (string rdpFilePath in rdpFiles)
+                {
+                    try
+                    {
+                        // 删除文件
+                        File.Delete(rdpFilePath);
+                        Console.WriteLine($"Deleted: {rdpFilePath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to delete {rdpFilePath}: {ex.Message}");
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine("Folder does not exist.");
+            }
+
+            Console.WriteLine("Operation completed.");
+        }
+        private void deleteRegList()
+        {
+            string folderPath = RDPFileName; // 指定文件夹路径
+
+            // 检查文件夹是否存在
+            if (Directory.Exists(folderPath))
+            {
+                // 获取文件夹中所有的RDP文件
+                string[] rdpFiles = Directory.GetFiles(folderPath, "*.reg");
+
+                // 遍历并删除所有RDP文件
+                foreach (string rdpFilePath in rdpFiles)
+                {
+                    try
+                    {
+                        // 删除文件
+                        File.Delete(rdpFilePath);
+                        Console.WriteLine($"Deleted: {rdpFilePath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to delete {rdpFilePath}: {ex.Message}");
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine("Folder does not exist.");
+            }
+
+            Console.WriteLine("Operation completed.");
+        }
+        private void TcpPingCheck_CheckedChanged(object sender, EventArgs e)
+        {
+            if (TcpPingCheck.Checked)
+            {
+                timer.Enabled = true;
+                lastPingSuccess1 = false;
+                lastPingSuccess2 = false;
+
+            }
+            else
+            {
+                timer.Enabled = false;
+                RDPLabel1.Text = "1";
+                RDPLabel2.Text = "2";
+                RDPLabel3.Text = "3";
+                RDPLabel4.Text = "4";
+                if (SSHFlag)
+                {
+                    SSHLabel1.Text = "SSH";
+                    SSHLabel2.Text = "SSH";
+                }
+                else
+                {
+                    SSHLabel1.Text = "RDP";
+                    SSHLabel2.Text = "RDP";
+                }
+            }
+            tcpPingFlag = TcpPingCheck.Checked;
         }
 
-            // 读取属性和同步勾选框
-            private void refreshCheckboxState()
+        private void FullScreenCheck_CheckedChanged(object sender, EventArgs e)
         {
-            // 读取系统属性
-            deleteFlag = Properties.Settings.Default.deleteFlag;
-            tcpPingFlag = Properties.Settings.Default.tcpPingFlag;
-            fullScreenFlag = Properties.Settings.Default.fullScreenFlag;
-            topFlag = Properties.Settings.Default.topFlag;
-            SSHFlag = Properties.Settings.Default.SSHFlag;
-            SSHMethod = Properties.Settings.Default.SSHMethodFlag;
-            SSHLowPingFlag = Properties.Settings.Default.SSHLowPingFlag;
-            screenMode = fullScreenFlag ? "0" : "1";  // 全屏=0，窗口=1
-
-            // 同步Checkbox选择
-            DeleteRDPCheck.Checked = Properties.Settings.Default.deleteFlag;
-            TcpPingCheck.Checked = Properties.Settings.Default.tcpPingFlag;
-            FullScreenCheck.Checked = Properties.Settings.Default.fullScreenFlag;
-            TopMostCheck.Checked = Properties.Settings.Default.topFlag;
-            //SSHLoginCheck.Checked = Properties.Settings.Default.SSHFlag;
-            //SSHMethodCheck.Checked = Properties.Settings.Default.SSHMethodFlag;
-            //SSHLowPingCheck.Checked = Properties.Settings.Default.SSHLowPingFlag;
+            fullScreenFlag = FullScreenCheck.Checked;
         }
+        private void TopMostCheck_CheckedChanged(object sender, EventArgs e)
+        {
+            topFlag = TopMostCheck.Checked;
+            this.TopMost = topFlag;
+            
+        }
+
 
         // 当SettingsForm关闭时MainForm触发该事件
         private void SettingForm_FormClosedEvent(object sender, EventArgs e)
         {
-            // Console.WriteLine("MainForm refreshCheckboxState()");
-            refreshCheckboxState();
+            syncVariables();
+            syncWindowsOption();
         }
 
         // 打开SettingsForm
@@ -1473,6 +1029,44 @@ password {password}";
             settingsForm.ShowDialog();
             
         }
+
+        private AutoLoginForm autoLogin;
+        private void OpenAutoLogin()
+        {
+
+            // 如果窗体已经实例化且处于显示状态，则隐藏
+            if (autoLogin != null && !autoLogin.IsDisposed && autoLogin.Visible)
+            {
+                autoLogin.Hide();
+            }
+            else
+            {
+                // 如果窗体未实例化或者已被销毁，则创建新的窗体实例
+                if (autoLogin == null || autoLogin.IsDisposed)
+                {
+                    autoLogin = new AutoLoginForm();
+                }
+                // 显示窗体
+                autoLogin.TopMost = this.TopMost;
+                autoLogin.Show();
+            }
+        }
+
+
+        private void ResolutionComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            ParseResolution(ResolutionComboBox.Text, out width, out height);
+        }
+
+        private void ResolutionComboBox_Leave(object sender, EventArgs e)
+        {
+            ParseResolution(ResolutionComboBox.Text, out width, out height);
+        }
+        private void AutoLoginbutton_Click(object sender, EventArgs e)
+        {
+            OpenAutoLogin();
+        }
+
 
         // ----------------------------------------------------------------------------------------------------------
         // 快捷键
@@ -1528,8 +1122,9 @@ password {password}";
                             else
                             {
                                 this.Show();
-                                if (TcpPingCheck.Checked) { timer.Start(); }
-
+                                if (TcpPingCheck.Checked) { 
+                                    timer.Start(); 
+                                }
                                 this.WindowState = FormWindowState.Normal;
                                 notifyIcon.Visible = false;
                             }
@@ -1566,7 +1161,7 @@ password {password}";
             }
             else
             {
-                MessageBox.Show("无法加载嵌入的图标资源。");
+                MessageBox.Show($"无法加载嵌入的图标资源", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
             }
 
 
@@ -1582,7 +1177,7 @@ password {password}";
         private void aboutMenuItem_Click(object sender, EventArgs e)
         {
             // 处理退出菜单项的点击事件，可以在这里添加退出应用程序的逻辑
-            MessageBox.Show("Auther by hmomeng@gmail.com");
+            MessageBox.Show($"Auther by hmomeng@gmail.com", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
         }
         private void NotifyIcon_Click(object sender, EventArgs e)
         {
@@ -1600,5 +1195,10 @@ password {password}";
             // 在窗体关闭时释放托盘图标资源
             notifyIcon.Dispose();
         }
+        // 快捷键
+        // ----------------------------------------------------------------------------------------------------------
+
+
+
     }
 }

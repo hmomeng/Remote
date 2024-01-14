@@ -56,6 +56,7 @@
             this.groupBox2 = new System.Windows.Forms.GroupBox();
             this.OpenRDPListButton = new System.Windows.Forms.Button();
             this.groupBox3 = new System.Windows.Forms.GroupBox();
+            this.AutoLoginButton = new System.Windows.Forms.Button();
             this.DefaultPassConnComboBox = new System.Windows.Forms.ComboBox();
             this.label2 = new System.Windows.Forms.Label();
             this.DefaultPassConnButton = new System.Windows.Forms.Button();
@@ -64,9 +65,10 @@
             this.SettingButton = new System.Windows.Forms.Button();
             this.ClearTextBoxtButton = new System.Windows.Forms.Button();
             this.TopMostCheck = new System.Windows.Forms.CheckBox();
-            this.DeleteRDPCheck = new System.Windows.Forms.CheckBox();
             this.FullScreenCheck = new System.Windows.Forms.CheckBox();
             this.TcpPingCheck = new System.Windows.Forms.CheckBox();
+            this.ResolutionComboBox = new System.Windows.Forms.ComboBox();
+            this.label3 = new System.Windows.Forms.Label();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
             this.groupBox3.SuspendLayout();
@@ -356,6 +358,7 @@
             // 
             // groupBox3
             // 
+            this.groupBox3.Controls.Add(this.AutoLoginButton);
             this.groupBox3.Controls.Add(this.DefaultPassConnComboBox);
             this.groupBox3.Controls.Add(this.label2);
             this.groupBox3.Controls.Add(this.DefaultPassConnButton);
@@ -367,12 +370,22 @@
             this.groupBox3.TabStop = false;
             this.groupBox3.Text = "默认账密登录";
             // 
+            // AutoLoginButton
+            // 
+            this.AutoLoginButton.Location = new System.Drawing.Point(391, 21);
+            this.AutoLoginButton.Name = "AutoLoginButton";
+            this.AutoLoginButton.Size = new System.Drawing.Size(62, 23);
+            this.AutoLoginButton.TabIndex = 17;
+            this.AutoLoginButton.Text = "批量";
+            this.AutoLoginButton.UseVisualStyleBackColor = true;
+            this.AutoLoginButton.Click += new System.EventHandler(this.AutoLoginbutton_Click);
+            // 
             // DefaultPassConnComboBox
             // 
             this.DefaultPassConnComboBox.FormattingEnabled = true;
-            this.DefaultPassConnComboBox.Location = new System.Drawing.Point(277, 21);
+            this.DefaultPassConnComboBox.Location = new System.Drawing.Point(228, 21);
             this.DefaultPassConnComboBox.Name = "DefaultPassConnComboBox";
-            this.DefaultPassConnComboBox.Size = new System.Drawing.Size(87, 20);
+            this.DefaultPassConnComboBox.Size = new System.Drawing.Size(76, 20);
             this.DefaultPassConnComboBox.TabIndex = 3;
             // 
             // label2
@@ -386,7 +399,7 @@
             // 
             // DefaultPassConnButton
             // 
-            this.DefaultPassConnButton.Location = new System.Drawing.Point(370, 20);
+            this.DefaultPassConnButton.Location = new System.Drawing.Point(310, 20);
             this.DefaultPassConnButton.Name = "DefaultPassConnButton";
             this.DefaultPassConnButton.Size = new System.Drawing.Size(75, 23);
             this.DefaultPassConnButton.TabIndex = 1;
@@ -398,15 +411,16 @@
             // 
             this.DefaultPassConnIPTextBox.Location = new System.Drawing.Point(112, 20);
             this.DefaultPassConnIPTextBox.Name = "DefaultPassConnIPTextBox";
-            this.DefaultPassConnIPTextBox.Size = new System.Drawing.Size(158, 21);
+            this.DefaultPassConnIPTextBox.Size = new System.Drawing.Size(110, 21);
             this.DefaultPassConnIPTextBox.TabIndex = 0;
             // 
             // groupBox4
             // 
+            this.groupBox4.Controls.Add(this.label3);
+            this.groupBox4.Controls.Add(this.ResolutionComboBox);
             this.groupBox4.Controls.Add(this.SettingButton);
             this.groupBox4.Controls.Add(this.ClearTextBoxtButton);
             this.groupBox4.Controls.Add(this.TopMostCheck);
-            this.groupBox4.Controls.Add(this.DeleteRDPCheck);
             this.groupBox4.Controls.Add(this.FullScreenCheck);
             this.groupBox4.Controls.Add(this.TcpPingCheck);
             this.groupBox4.Location = new System.Drawing.Point(477, 356);
@@ -448,17 +462,6 @@
             this.TopMostCheck.UseVisualStyleBackColor = true;
             this.TopMostCheck.CheckedChanged += new System.EventHandler(this.TopMostCheck_CheckedChanged);
             // 
-            // DeleteRDPCheck
-            // 
-            this.DeleteRDPCheck.AutoSize = true;
-            this.DeleteRDPCheck.Location = new System.Drawing.Point(26, 59);
-            this.DeleteRDPCheck.Name = "DeleteRDPCheck";
-            this.DeleteRDPCheck.Size = new System.Drawing.Size(132, 16);
-            this.DeleteRDPCheck.TabIndex = 4;
-            this.DeleteRDPCheck.Text = "退出时清空历史列表";
-            this.DeleteRDPCheck.UseVisualStyleBackColor = true;
-            this.DeleteRDPCheck.CheckedChanged += new System.EventHandler(this.DeleteRDPCheck_CheckedChanged);
-            // 
             // FullScreenCheck
             // 
             this.FullScreenCheck.AutoSize = true;
@@ -481,11 +484,45 @@
             this.TcpPingCheck.UseVisualStyleBackColor = true;
             this.TcpPingCheck.CheckedChanged += new System.EventHandler(this.TcpPingCheck_CheckedChanged);
             // 
+            // ResolutionComboBox
+            // 
+            this.ResolutionComboBox.FormattingEnabled = true;
+            this.ResolutionComboBox.Items.AddRange(new object[] {
+            "640x480",
+            "800x600",
+            "1024x768",
+            "1180x720",
+            "1280x720",
+            "1280x768",
+            "1280x800",
+            "1280x1024",
+            "1366x768",
+            "1440x900",
+            "1400x1050",
+            "1680x1050",
+            "1920x1080"});
+            this.ResolutionComboBox.Location = new System.Drawing.Point(77, 58);
+            this.ResolutionComboBox.Name = "ResolutionComboBox";
+            this.ResolutionComboBox.Size = new System.Drawing.Size(89, 20);
+            this.ResolutionComboBox.TabIndex = 17;
+            this.ResolutionComboBox.Text = "1180x720";
+            this.ResolutionComboBox.SelectedIndexChanged += new System.EventHandler(this.ResolutionComboBox_SelectedIndexChanged);
+            this.ResolutionComboBox.Leave += new System.EventHandler(this.ResolutionComboBox_Leave);
+            // 
+            // label3
+            // 
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(24, 61);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(47, 12);
+            this.label3.TabIndex = 18;
+            this.label3.Text = "分辨率:";
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(683, 478);
+            this.ClientSize = new System.Drawing.Size(682, 481);
             this.Controls.Add(this.groupBox4);
             this.Controls.Add(this.groupBox3);
             this.Controls.Add(this.groupBox2);
@@ -498,7 +535,6 @@
             this.Name = "MainForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "远程工具";
-            this.TopMost = true;
             this.Load += new System.EventHandler(this.Form1_Load);
             this.groupBox1.ResumeLayout(false);
             this.groupBox1.PerformLayout();
@@ -542,7 +578,6 @@
         private System.Windows.Forms.CheckBox TcpPingCheck;
         private System.Windows.Forms.CheckBox FullScreenCheck;
         private System.Windows.Forms.Button OpenRDPListButton;
-        private System.Windows.Forms.CheckBox DeleteRDPCheck;
         private System.Windows.Forms.CheckBox TopMostCheck;
         private System.Windows.Forms.Button SSHButton2;
         private System.Windows.Forms.TextBox SSHtextBox2;
@@ -552,6 +587,9 @@
         private System.Windows.Forms.Label SSHLabel1;
         private System.Windows.Forms.Button ClearTextBoxtButton;
         private System.Windows.Forms.Button SettingButton;
+        private System.Windows.Forms.Button AutoLoginButton;
+        private System.Windows.Forms.ComboBox ResolutionComboBox;
+        private System.Windows.Forms.Label label3;
     }
 }
 
