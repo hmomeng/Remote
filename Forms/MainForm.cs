@@ -12,6 +12,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using static System.Windows.Forms.LinkLabel;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.StartPanel;
 
 namespace Remote
 {
@@ -74,6 +76,7 @@ namespace Remote
             TcpPingCheck.Checked = tcpPingFlag;
             FullScreenCheck.Checked = fullScreenFlag;
             TopMostCheck.Checked = topFlag;
+            this.TopMost = topFlag;
             ResolutionComboBox.Text = width.ToString() + "x" + height.ToString();
             //DeleteRDPCheck.Checked = deleteFlag;
             //SSHLoginCheck.Checked =SSHFlag;
@@ -146,7 +149,7 @@ namespace Remote
                 string addr, ip, port, username, password;
                 defaultText = defaultText == "SSH" ? "22" : "3389";
 
-                ParseTextBoxContent(textBox.Text, out ip, out port, out username, out password, defaultText);
+                PublicMethod.TryParseIpAndPort(textBox.Text, out ip, out port, defaultText);
                 addr = ip + ":" + port;
 
                 // 如果上次没有Ping通
@@ -179,6 +182,10 @@ namespace Remote
         // 计时器定时执行代码，持续TcpPing
         private async void Timer_Tick(object sender, EventArgs e)
         {
+
+
+
+
             _ = await HandleTextBoxAsync(RDPtextBox1, RDPLabel1, false, "1");
             _ = await HandleTextBoxAsync(RDPtextBox2, RDPLabel2, false, "2");
             _ = await HandleTextBoxAsync(RDPtextBox3, RDPLabel3, false, "3");
@@ -206,52 +213,55 @@ namespace Remote
             return string.IsNullOrEmpty(value) || value.Trim().Length == 0;
         }
 
-        public static bool TryExtractInfoFromSingleLine(string line, out string ip, out string port, out string username, out string password, string defaultPort = "3389")
+        public static bool TryExtractInfoFromSingleLine(string textbox, out string ip, out string port, out string username, out string password, string defaultPort = "3389")
         {
             ip = "";
             port = "";
             string host = string.Empty;
-            username = string.Empty;
+            username = defaultPort == "3389"?"Administrator":"root";
             password = string.Empty;
 
-            // 去除空行
-            line = line.Replace("\r", "").Replace("\n", "");
-            
-            // 判断是否只有一行
-            if (line.Contains("\n"))
+            // 替换中文、中文符号、空格为换行
+            string replacedString = Regex.Replace(textbox, @"[^\x00-\x7F]+", "\n");
+            // 将连续的多个换行符替换为单个换行
+            replacedString = Regex.Replace(replacedString, @"\n+", "\n");
+
+            // 根据换行切割字符串
+            string[] lines = replacedString.Split('\n');
+
+            foreach (var line in lines)
             {
-                return false;
-            }
-            // 删除固定格式的标识
-            line = line.Replace("服务器IP：", "").Replace("登录账号：", "\n").Replace("登录密码：", "\n");
+                //Console.WriteLine("多行模式");
+                // 清除空行和中文字符和符号
+                string cleanedLine = RemoveChineseAndTrim(line);
 
-            // 根据换行分隔
-            string[] parts = line.Split('\n');
-
-            if (parts.Length >= 3)
-            {
-                host = parts[0].Trim();
-                string[] addr = host.Split(':');
-                if (addr.Length == 1)
+                // 如果该行包含IP信息
+                Match ipPortMatch = Regex.Match(cleanedLine, @"(\d+\.\d+\.\d+\.\d+)(?::(\d+))?");
+                if (ipPortMatch.Success)
                 {
-                    ip = addr[0].Trim();
-                    port = defaultPort;
-                }
-                else
-                {
-                    ip = addr[0].Trim();
-                    port = addr[1].Trim();
-                }
+                    ip = ipPortMatch.Groups[1].Value;
+                    port = ipPortMatch.Groups[2].Success ? ipPortMatch.Groups[2].Value : defaultPort;
 
-                username = parts[1].Trim();
-                password = parts[2].Trim();
-                //Console.WriteLine($"Host: {host}, Username: {username}, Password: {password}");
 
-                return true;
+                    // 寻找下一行，如果存在则为用户名行
+                    int nextLineIndex = Array.IndexOf(lines, line) + 1;
+                    if (nextLineIndex < lines.Length)
+                    {
+                        username = RemoveChineseAndTrim(lines[nextLineIndex]);
+
+                        // 寻找下一行，如果存在则为密码行
+                        int passwordLineIndex = nextLineIndex + 1;
+                        if (passwordLineIndex < lines.Length)
+                        {
+                            password = RemoveChineseAndTrim(lines[passwordLineIndex]);
+                        }
+
+                        // 结束匹配
+                        return true;
+                    }
+                }
             }
-
-            // 如果匹配不成功，返回标识
-            return false;
+            return true;
         }
        
         public  void ParseResolution(string Resolution,out  int width,out  int height)
@@ -269,75 +279,6 @@ namespace Remote
             {
                 MessageBox.Show($"分辨率参数有误", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
             }
-        }
-        // 解析字符串
-        public static void ParseTextBoxContent(string textBoxContent, out string ip, out string port, out string username, out string password, string defaultPort = "3389")
-        {
-            username = "administrator";
-            password = string.Empty;
-            string oneLineText = textBoxContent;
-            ip = "";
-            port = "";
-
-            // 判断并去除前后的双引号
-            if (textBoxContent.StartsWith("\"") && textBoxContent.EndsWith("\""))
-            {
-                // 使用 TrimStart 和 TrimEnd 方法去除前后的双引号
-                textBoxContent = textBoxContent.Substring(1,textBoxContent.Length-2);
-                oneLineText = textBoxContent;
-            }
-
-            // 将字符串按照换行符切割分别传入lines数组中
-            string[] lines = textBoxContent.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-            //Console.WriteLine(lines.Length);
-            if(lines.Length == 1)
-            {
-                
-                //Console.WriteLine("单行模式");
-                // 尝试从单行提取信息
-                if (TryExtractInfoFromSingleLine(oneLineText, out ip,out port, out username, out password,  defaultPort))
-                {
-                    TryExtractInfoFromSingleLine(oneLineText, out ip, out port, out username, out password, defaultPort);
-                    //匹配成功，可以使用 host、username 和 password
-                    return;
-                }
-            }
-
-            // 从第一行开始处理
-            foreach (var line in lines)
-            {
-                //Console.WriteLine("多行模式");
-                // 清除空行和中文字符和符号
-                string cleanedLine = RemoveChineseAndTrim(line);
-
-                // 如果该行包含IP信息
-                Match ipPortMatch = Regex.Match(cleanedLine, @"(\d+\.\d+\.\d+\.\d+)(?::(\d+))?");
-                if (ipPortMatch.Success)
-                {
-                   ip = ipPortMatch.Groups[1].Value;
-                   port = ipPortMatch.Groups[2].Success ? ipPortMatch.Groups[2].Value : defaultPort;
-
-
-                    // 寻找下一行，如果存在则为用户名行
-                    int nextLineIndex = Array.IndexOf(lines, line) + 1;
-                    if (nextLineIndex < lines.Length)
-                    {
-                        username = RemoveChineseAndTrim(lines[nextLineIndex]);
-
-                        // 寻找下一行，如果存在则为密码行
-                        int passwordLineIndex = nextLineIndex + 1;
-                        if (passwordLineIndex < lines.Length)
-                        {
-                            password = RemoveChineseAndTrim(lines[passwordLineIndex]);
-                        }
-
-                        // 结束匹配
-                        break;
-                    }
-                }
-
-            }
-            //Console.WriteLine($"Host: {ip}:{port}, Username: {username}, Password: {password}");
         }
 
         // 执行CMD命令
@@ -388,7 +329,7 @@ namespace Remote
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"发生错误：{ex.Message}");
+                MessageBox.Show($"{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
             }
             
             // 创建 RDP 文件路径
@@ -485,7 +426,7 @@ password {password}";
                 if (SSHFlag)
                 {
                     string textBoxContent = textBox.Text;
-                    ParseTextBoxContent(textBoxContent, out string ip, out string port, out string username, out string password,"22");
+                    PublicMethod.ParseTextToRemoteInfo(textBoxContent, out string ip, out string port, out string username, out string password,"22");
 
                     if (!string.IsNullOrEmpty(ip) && !string.IsNullOrEmpty(port))
                     {
@@ -567,7 +508,7 @@ password {password}";
             string username;
             string password;
             // 解析文本返回远程地址、用户名、密码
-            ParseTextBoxContent(textBoxContent, out ip,out port, out username, out password);
+            PublicMethod.ParseTextToRemoteInfo(textBoxContent, out ip,out port, out username, out password);
             addr = ip + ":" + port;
             //Console.WriteLine($"Host: {addr}, Username: {username}, Password: {password}");
 
@@ -576,7 +517,6 @@ password {password}";
             {
                 // 生成 RDP 文件
                 GenerateRdpFile(addr, username, encryptedPassword);
-                
                 // 执行 RDP 文件
                 string rdpFilePath = Path.Combine(Path.Combine(Environment.CurrentDirectory, RDPFileName), ip + ".rdp");
                 ExecuteRdpFile(rdpFilePath);
@@ -587,7 +527,7 @@ password {password}";
                 MessageBox.Show($"运行RDP文件出错，请检查输入格式是否正确", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
             }
         }
-
+        
         // 计算TCPPing延迟
         static async Task<int> MeasureTcpPingExecutionTime(string host, int timeoutMilliseconds)
         {
@@ -603,7 +543,7 @@ password {password}";
             stopwatch.Stop();
             if (delay) {
                 // 输出TcpPing方法执行时间
-                //Console.WriteLine($"TcpPing方法执行时间: {stopwatch.ElapsedMilliseconds} 毫秒");
+                //Console.WriteLine($"TcpPing方法执行时间: {stopwatch.ElapsedMilliseconds} 毫秒      {System.DateTime.Now}");
                 // 返回延迟时间
                 return (int)stopwatch.ElapsedMilliseconds;
             }
@@ -706,7 +646,7 @@ password {password}";
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                MessageBox.Show($"{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
             }
         }
 
@@ -820,11 +760,10 @@ password {password}";
                 // 将修改后的文本内容写回到RDP文件中
                 File.WriteAllLines(filePath, lines);
 
-                Console.WriteLine("RDP文件已更新。");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"发生错误：{ex.Message}");
+                MessageBox.Show($"{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
             }
         }
 
@@ -875,7 +814,7 @@ password {password}";
             catch (Exception ex)
             {
                 // 处理异常
-                Console.WriteLine("Error: " + ex.Message);
+                MessageBox.Show($"{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
             }
         }
 
@@ -923,20 +862,14 @@ password {password}";
                     {
                         // 删除文件
                         File.Delete(rdpFilePath);
-                        Console.WriteLine($"Deleted: {rdpFilePath}");
+                        //Console.WriteLine($"Deleted: {rdpFilePath}");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Failed to delete {rdpFilePath}: {ex.Message}");
+                        MessageBox.Show($"{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
                     }
                 }
             }
-            else
-            {
-                Console.WriteLine("Folder does not exist.");
-            }
-
-            Console.WriteLine("Operation completed.");
         }
         private void deleteRegList()
         {
@@ -955,20 +888,14 @@ password {password}";
                     {
                         // 删除文件
                         File.Delete(rdpFilePath);
-                        Console.WriteLine($"Deleted: {rdpFilePath}");
+                        //Console.WriteLine($"Deleted: {rdpFilePath}");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Failed to delete {rdpFilePath}: {ex.Message}");
+                        MessageBox.Show($"{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, (MessageBoxOptions)0x40000);
                     }
                 }
             }
-            else
-            {
-                Console.WriteLine("Folder does not exist.");
-            }
-
-            Console.WriteLine("Operation completed.");
         }
         private void TcpPingCheck_CheckedChanged(object sender, EventArgs e)
         {
@@ -1017,6 +944,7 @@ password {password}";
         {
             syncVariables();
             syncWindowsOption();
+            timer.Interval = TimeInterval;
         }
 
         // 打开SettingsForm
@@ -1195,6 +1123,39 @@ password {password}";
             // 在窗体关闭时释放托盘图标资源
             notifyIcon.Dispose();
         }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            string ip, port, username, password, defalutPort;
+            List<TextBox> RDPtextBoxes = new List<TextBox>{ RDPtextBox1, RDPtextBox2, RDPtextBox3, RDPtextBox4}; 
+            foreach (var textBoxe in RDPtextBoxes)
+            {
+                if(textBoxe.Text.Length > 0)
+                {
+                    
+                    PublicMethod.ParseTextToRemoteInfo(textBoxe.Text, out ip, out port, out username, out password);
+                    GenerateTemplate(textBoxe, ip, port, username, password);
+                }
+            }
+            List<TextBox> SSHtextBoxes = new List<TextBox> { SSHtextBox1, SSHtextBox2 };
+            if (SSHFlag) { defalutPort = "22"; } else { defalutPort = "3389"; }
+            foreach (var textBoxe in SSHtextBoxes)
+            {
+                if (textBoxe.Text.Length > 0)
+                {
+                    PublicMethod.ParseTextToRemoteInfo(textBoxe.Text, out ip, out port, out username, out password, defalutPort);
+                    GenerateTemplate(textBoxe, ip, port, username, password);
+                }
+            }
+
+        }
+        private void GenerateTemplate(TextBox textBox,string ip,string port ,string username ,string password)
+        {
+            textBox.Text = $@"服务器IP：{ip}:{port}
+登录账号：{username}
+登录密码：{password}";
+        }
+
         // 快捷键
         // ----------------------------------------------------------------------------------------------------------
 

@@ -62,13 +62,14 @@
             this.DefaultPassConnButton = new System.Windows.Forms.Button();
             this.DefaultPassConnIPTextBox = new System.Windows.Forms.TextBox();
             this.groupBox4 = new System.Windows.Forms.GroupBox();
+            this.button2 = new System.Windows.Forms.Button();
+            this.label3 = new System.Windows.Forms.Label();
+            this.ResolutionComboBox = new System.Windows.Forms.ComboBox();
             this.SettingButton = new System.Windows.Forms.Button();
             this.ClearTextBoxtButton = new System.Windows.Forms.Button();
             this.TopMostCheck = new System.Windows.Forms.CheckBox();
             this.FullScreenCheck = new System.Windows.Forms.CheckBox();
             this.TcpPingCheck = new System.Windows.Forms.CheckBox();
-            this.ResolutionComboBox = new System.Windows.Forms.ComboBox();
-            this.label3 = new System.Windows.Forms.Label();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
             this.groupBox3.SuspendLayout();
@@ -416,6 +417,7 @@
             // 
             // groupBox4
             // 
+            this.groupBox4.Controls.Add(this.button2);
             this.groupBox4.Controls.Add(this.label3);
             this.groupBox4.Controls.Add(this.ResolutionComboBox);
             this.groupBox4.Controls.Add(this.SettingButton);
@@ -429,6 +431,50 @@
             this.groupBox4.TabIndex = 16;
             this.groupBox4.TabStop = false;
             this.groupBox4.Text = "设置";
+            // 
+            // button2
+            // 
+            this.button2.Location = new System.Drawing.Point(104, 33);
+            this.button2.Name = "button2";
+            this.button2.Size = new System.Drawing.Size(75, 22);
+            this.button2.TabIndex = 19;
+            this.button2.Text = "一键排版";
+            this.button2.UseVisualStyleBackColor = true;
+            this.button2.Click += new System.EventHandler(this.button2_Click);
+            // 
+            // label3
+            // 
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(24, 63);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(47, 12);
+            this.label3.TabIndex = 18;
+            this.label3.Text = "分辨率:";
+            // 
+            // ResolutionComboBox
+            // 
+            this.ResolutionComboBox.FormattingEnabled = true;
+            this.ResolutionComboBox.Items.AddRange(new object[] {
+            "640x480",
+            "800x600",
+            "1024x768",
+            "1180x720",
+            "1280x720",
+            "1280x768",
+            "1280x800",
+            "1280x1024",
+            "1366x768",
+            "1440x900",
+            "1400x1050",
+            "1680x1050",
+            "1920x1080"});
+            this.ResolutionComboBox.Location = new System.Drawing.Point(77, 60);
+            this.ResolutionComboBox.Name = "ResolutionComboBox";
+            this.ResolutionComboBox.Size = new System.Drawing.Size(89, 20);
+            this.ResolutionComboBox.TabIndex = 17;
+            this.ResolutionComboBox.Text = "1180x720";
+            this.ResolutionComboBox.SelectedIndexChanged += new System.EventHandler(this.ResolutionComboBox_SelectedIndexChanged);
+            this.ResolutionComboBox.Leave += new System.EventHandler(this.ResolutionComboBox_Leave);
             // 
             // SettingButton
             // 
@@ -456,9 +502,9 @@
             this.TopMostCheck.AutoSize = true;
             this.TopMostCheck.Location = new System.Drawing.Point(26, 37);
             this.TopMostCheck.Name = "TopMostCheck";
-            this.TopMostCheck.Size = new System.Drawing.Size(120, 16);
+            this.TopMostCheck.Size = new System.Drawing.Size(48, 16);
             this.TopMostCheck.TabIndex = 5;
-            this.TopMostCheck.Text = "置顶(会遮挡窗口)";
+            this.TopMostCheck.Text = "置顶";
             this.TopMostCheck.UseVisualStyleBackColor = true;
             this.TopMostCheck.CheckedChanged += new System.EventHandler(this.TopMostCheck_CheckedChanged);
             // 
@@ -484,45 +530,11 @@
             this.TcpPingCheck.UseVisualStyleBackColor = true;
             this.TcpPingCheck.CheckedChanged += new System.EventHandler(this.TcpPingCheck_CheckedChanged);
             // 
-            // ResolutionComboBox
-            // 
-            this.ResolutionComboBox.FormattingEnabled = true;
-            this.ResolutionComboBox.Items.AddRange(new object[] {
-            "640x480",
-            "800x600",
-            "1024x768",
-            "1180x720",
-            "1280x720",
-            "1280x768",
-            "1280x800",
-            "1280x1024",
-            "1366x768",
-            "1440x900",
-            "1400x1050",
-            "1680x1050",
-            "1920x1080"});
-            this.ResolutionComboBox.Location = new System.Drawing.Point(77, 58);
-            this.ResolutionComboBox.Name = "ResolutionComboBox";
-            this.ResolutionComboBox.Size = new System.Drawing.Size(89, 20);
-            this.ResolutionComboBox.TabIndex = 17;
-            this.ResolutionComboBox.Text = "1180x720";
-            this.ResolutionComboBox.SelectedIndexChanged += new System.EventHandler(this.ResolutionComboBox_SelectedIndexChanged);
-            this.ResolutionComboBox.Leave += new System.EventHandler(this.ResolutionComboBox_Leave);
-            // 
-            // label3
-            // 
-            this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(24, 61);
-            this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(47, 12);
-            this.label3.TabIndex = 18;
-            this.label3.Text = "分辨率:";
-            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(682, 481);
+            this.ClientSize = new System.Drawing.Size(680, 481);
             this.Controls.Add(this.groupBox4);
             this.Controls.Add(this.groupBox3);
             this.Controls.Add(this.groupBox2);
@@ -590,6 +602,7 @@
         private System.Windows.Forms.Button AutoLoginButton;
         private System.Windows.Forms.ComboBox ResolutionComboBox;
         private System.Windows.Forms.Label label3;
+        private System.Windows.Forms.Button button2;
     }
 }
 
